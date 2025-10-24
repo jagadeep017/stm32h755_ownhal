@@ -178,4 +178,13 @@ typedef struct{
 #define SPI6_CLK_EN()		(RCC->APB4ENR |= (1<<5))
 #define SPI6_CLK_DI()		(RCC->APB4ENR &= ~(1<<5))
 
+#define I2C1_CLK_EN()		(RCC->APB1LENR |= (1<<21))
+#define I2C1_CLK_DI()		(RCC->APB1LENR &= ~(1<<21))
+#define I2C2_CLK_EN()		(RCC->APB1LENR |= (1<<22))
+#define I2C2_CLK_DI()		(RCC->APB1LENR &= ~(1<<22))
+#define I2C3_CLK_EN()		(RCC->APB1LENR |= (1<<23))
+#define I2C3_CLK_DI()		(RCC->APB1LENR &= ~(1<<23))
+#define I2C4_CLK_EN()		(RCC->APB4ENR |= (1<<7))
+#define I2C4_CLK_DI()		(RCC->APB4ENR &= ~(1<<7))
+
 #endif /* STM32H7XX_HAL_INC_HAL_RCC_H_ */
