@@ -42,14 +42,14 @@ typedef struct{
 }SPI_config_t;
 
 typedef struct{
-	SPI_reg_t 		*SPIx;			//Holds the base of the SPI peripheral registers
-	SPI_config_t 	SPI_config;		//Holds the configuration values
-	uint8_t			*pTxBuffer;		//transmit buffer address
-	uint8_t			*pRxBuffer;		//receive buffer address
-	uint32_t		TxLen;			//Transmit length
-	uint32_t		RxLen;			//receive length
-	uint8_t			TxState;		//stores the busy state of SPI peripheral during transmit
-	uint8_t			RxState;		//stores the busy state during receive
+	SPI_reg_t 				*SPIx;			//Holds the base of the SPI peripheral registers
+	SPI_config_t 			SPI_config;		//Holds the configuration values
+	uint8_t					*pTxBuffer;		//transmit buffer address
+	uint8_t					*pRxBuffer;		//receive buffer address
+	volatile uint8_t		TxState;		//stores the busy state of SPI peripheral during transmit
+	volatile uint8_t		RxState;		//stores the busy state during receive
+	uint32_t				TxLen;			//Transmit length
+	uint32_t				RxLen;			//receive length
 }SPI_handle_t;
 
 #define SPI1	((SPI_reg_t *)SPI1_BASE_ADDR)
@@ -170,6 +170,7 @@ typedef struct{
 #define SPI_SR_OVR_POS			6
 #define SPI_SR_RXP_POS			0
 #define SPI_SR_TXP_POS			1
+#define SPI_SR_CSTART_POS		16
 
 #define SPI_CR1_SPE_POS			0
 #define SPI_CR1_IOLOCK_POS		16
@@ -264,11 +265,7 @@ void SPI_recv(SPI_reg_t *SPIx, uint8_t *pRxbuffer, uint32_t len);
 /*
  * IRQ config and handling of SPI
  */
-void HAL_GPIO_irq_config(uint8_t irq_number, uint8_t type);
-
-void HAL_GPIO_irq_priority(uint8_t irq_number, uint8_t priority);
-
-uint8_t SPI_send_INT(SPI_handle_t *pSPIhandle, uint8_t *pTxBuffer, uint32_t Len);
+uint8_t SPI_send_INT(SPI_handle_t *pSPIhandle, uint8_t *pTxBuffer, uint16_t Len);
 
 uint8_t SPI_recv_INT(SPI_handle_t *pSPIhandle, uint8_t *pRxBuffer, uint32_t Len);
 
