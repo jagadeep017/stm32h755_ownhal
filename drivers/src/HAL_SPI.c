@@ -136,17 +136,19 @@ void HAL_SPI_CLK_control(SPI_reg_t *SPIx, uint8_t type){
  */
 void SPI_send(SPI_reg_t *SPIx, uint8_t *pTxbuffer, uint16_t len){
 
-	SPI_Peripheral_Control(SPIx, ENABLE);
-//	SPIx->CR2 |= len<<16;		//setting
+	//setting comm in simplex stransmit
+	SPIx->CFG2 &=~(0x3<<SPI_CFG2_COMM_POS);
+	SPIx->CFG2 |= (0x1<<SPI_CFG2_COMM_POS);
 
+	//load the data in tx data register based on the size
+	uint8_t dff = SPIx->CFG1 & 0x1f;
+	SPI_Peripheral_Control(SPIx, ENABLE);
 	SPIx->CR2 |= len<<SPI_CR2_TSIZE_POS;
+
 
 	SPIx->CR1 |= 1<<SPI_CR1_CSTART_POS;
 	while(len>0){
 		while(!(SPIx->SR & 1<<SPI_SR_TXP_POS));	//check whether there is space for 1 next data packet in TxFIFO
-
-		//load the data in tx data register based on the size
-		uint8_t dff = SPIx->CFG1 & 0x1f;
 
 		if(dff == SPI_DFF_8BITS){			//size is 8bits
 			*((uint8_t*)(&SPIx->TXDR)) = *pTxbuffer;
@@ -164,21 +166,28 @@ void SPI_send(SPI_reg_t *SPIx, uint8_t *pTxbuffer, uint16_t len){
 			len-=4;
 		}
 		else{
+			SPI_Peripheral_Control(SPIx, DISABLE);
 			return;
 		}
 	}
 
 	while(!(SPIx->SR&SPI_SR_TXC_POS));		//wait till all the data in txFIFO is transmitted
 	SPI_Peripheral_Control(SPIx, DISABLE);
+	SPIx->CR2 &= ~(0xffff<<SPI_CR2_TSIZE_POS);
+	SPIx->IFCR |= 1<<4;		//clearing txtf flag
 
 }
 
 void SPI_recv(SPI_reg_t *SPIx, uint8_t *pRxbuffer, uint32_t len){
+	//read the data from rx data register based on the size
+	//setting comm in simplex stransmit
+	SPIx->CFG2 &=~(0x3<<SPI_CFG2_COMM_POS);
+	SPIx->CFG2 |= (0x2<<SPI_CFG2_COMM_POS);
+	uint8_t dff = SPIx->CFG1 & 0x1f;
+	SPI_Peripheral_Control(SPIx, ENABLE);
+	SPIx->CR1 |= 1<<SPI_CR1_CSTART_POS;
 	while(len>0){
 		while(!(SPIx->SR & 1<<SPI_SR_RXP_POS));
-
-		//read the data from rx data register based on the size
-		uint8_t dff = SPIx->CFG1 & 0x1f;
 
 		if(dff == SPI_DFF_8BITS){			//size is 8bits
 			*(pRxbuffer) = *(uint8_t*)(&SPIx->RXDR);
@@ -196,9 +205,10 @@ void SPI_recv(SPI_reg_t *SPIx, uint8_t *pRxbuffer, uint32_t len){
 			len-=4;
 		}
 		else{
-			return;
+			break;
 		}
 	}
+	SPI_Peripheral_Control(SPIx, DISABLE);
 }
 
 
@@ -239,32 +249,13 @@ void SPI6_CLK_SEL(uint8_t type){
 	RCC->D3CCIPR |= type <<D3CCIPR_SPI6SEL_POS;
 }
 
+uint8_t SPI_send_INT(SPI_handle_t *pSPIhandle, uint8_t *pTxBuffer, uint16_t Len){
 
-/*
- * IRQ ocnfig and handling of SPI
- */
-void HAL_SPI_irq_config(uint8_t irq_number, uint8_t type){
-	//TODO need to check if correct parameters were passed
-	uint8_t ind = irq_number/32			//index of ISER or ICER
-			,pos = irq_number%32;		//position of that bit in ISER or ICER
-	if(type == ENABLE){
-		NVIC_ISER[ind] |= (1<<pos);
-	}
-	else{
-		NVIC_ICER[ind] |= (1<<pos);
-	}
-}
-
-
-void HAL_SPI_irq_priority(uint8_t irq_number, uint8_t priority){
-	uint8_t ind = irq_number/4			//index of the register in IPR
-			,pos = irq_number%4;		//position of bits in IPR
-	//setting the priority
-	NVIC_IPR[ind] |= ((uint32_t)priority<<(8*pos+4)); 		//because only 4 msb's are implemented in stm32 IPR
-}
-
-uint8_t SPI_send_INT(SPI_handle_t *pSPIhandle, uint8_t *pTxBuffer, uint32_t Len){
-
+	//setting length in tsize
+	pSPIhandle->SPIx->CR2 |= Len<<SPI_CR2_TSIZE_POS;
+	pSPIhandle->SPIx->CFG2 &=~(0x3<<SPI_CFG2_COMM_POS);
+	pSPIhandle->SPIx->CFG2 |= (0x1<<SPI_CFG2_COMM_POS);
+	SPI_Peripheral_Control(pSPIhandle->SPIx, ENABLE);
 	if(pSPIhandle->TxState != SPI_TX_INT_BUSY){
 		//setting the buffer and its length
 		pSPIhandle->pTxBuffer = pTxBuffer;
@@ -273,9 +264,11 @@ uint8_t SPI_send_INT(SPI_handle_t *pSPIhandle, uint8_t *pTxBuffer, uint32_t Len)
 		//setting the busy flag
 		pSPIhandle->TxState = SPI_TX_INT_BUSY;
 
+
+		pSPIhandle->SPIx->CR1 |= 1<<SPI_CR1_CSTART_POS;
+
 		//setting the TXEIE control bit to get interrupt when TXE flag is set in SR
 		pSPIhandle->SPIx->IER |= (1<<SPI_IER_TXPIE_POS);
-
 		//data is transmission will happen in IRQ code
 		return SPI_READY;
 	}
@@ -285,17 +278,24 @@ uint8_t SPI_send_INT(SPI_handle_t *pSPIhandle, uint8_t *pTxBuffer, uint32_t Len)
 
 uint8_t SPI_recv_INT(SPI_handle_t *pSPIhandle, uint8_t *pRxBuffer, uint32_t Len){
 	if(pSPIhandle->RxState != SPI_RX_INT_BUSY){
+		pSPIhandle->SPIx->CR2 |= Len<<SPI_CR2_TSIZE_POS;
+		pSPIhandle->SPIx->CFG2 &=~(0x3<<SPI_CFG2_COMM_POS);
+		pSPIhandle->SPIx->CFG2 |= (0x2<<SPI_CFG2_COMM_POS);
+		SPI_Peripheral_Control(pSPIhandle->SPIx, ENABLE);
 		//setting the buffer and its length
 		pSPIhandle->pRxBuffer = pRxBuffer;
 		pSPIhandle->RxLen = Len;
 
 		//setting the busy flag
-		pSPIhandle->RxState = SPI_TX_INT_BUSY;
+		pSPIhandle->RxState = SPI_RX_INT_BUSY;
+
+		pSPIhandle->SPIx->CR1 |= 1<<SPI_CR1_CSTART_POS;
+		//data is transmission will happen in IRQ code
 
 		//setting the TXEIE control bit to get interrupt when TXE flag is set in SR
 		pSPIhandle->SPIx->IER |= (1<<SPI_IER_RXPIE_POS);
 
-		//data is transmission will happen in IRQ code
+
 		return SPI_READY;
 	}
 	return SPI_RX_INT_BUSY;
@@ -304,6 +304,9 @@ uint8_t SPI_recv_INT(SPI_handle_t *pSPIhandle, uint8_t *pRxBuffer, uint32_t Len)
 
 void SPI_IRQ_handling(SPI_handle_t *pHandle){
 	if((pHandle->SPIx->IER & (1<<SPI_IER_TXPIE_POS))&(pHandle->SPIx->SR &(1<<SPI_SR_TXP_POS))){			//transmit
+		if(!(pHandle->SPIx->SR&(0xffff<<SPI_SR_CSTART_POS))){
+			return;
+		}
 		uint8_t dff = pHandle->SPIx->CFG1 & (0x1f<<SPI_CFG1_DFF_POS);
 		if(dff == SPI_DFF_8BITS){			//size is 8bits
 			*((uint8_t*)(&pHandle->SPIx->TXDR)) = *pHandle->pTxBuffer;
@@ -332,17 +335,17 @@ void SPI_IRQ_handling(SPI_handle_t *pHandle){
 	if((pHandle->SPIx->IER & (1<<SPI_IER_RXPIE_POS)&(pHandle->SPIx->SR &(1<<SPI_SR_RXP_POS)))){		//receive
 		uint8_t dff = pHandle->SPIx->CFG1 & (0x1f<<SPI_CFG1_DFF_POS);
 		if(dff == SPI_DFF_8BITS){			//size is 8bits
-			*(pHandle->pRxBuffer) = *(uint8_t*)(&pHandle->SPIx->RXDR);
+			*(pHandle->pRxBuffer) = *((uint8_t*)(&pHandle->SPIx->RXDR));
 			pHandle->pRxBuffer++;
 			pHandle->RxLen--;
 		}
 		else if(dff == SPI_DFF_16BITS){		//size is 16bits
-			*((uint16_t*)pHandle->pRxBuffer) = *(uint16_t*)(&pHandle->SPIx->RXDR);
+			*((uint16_t*)pHandle->pRxBuffer) = *((uint16_t*)(&pHandle->SPIx->RXDR));
 			pHandle->pRxBuffer+=2;
 			pHandle->RxLen-=2;
 		}
 		else if(dff == SPI_DFF_32BITS){		//size is 32bits
-			*((uint32_t*)pHandle->pRxBuffer) = *(uint32_t*)(&pHandle->SPIx->RXDR);
+			*((uint32_t*)pHandle->pRxBuffer) = *((uint32_t*)(&pHandle->SPIx->RXDR));
 			pHandle->pRxBuffer+=4;
 			pHandle->RxLen-=4;
 		}
@@ -378,6 +381,9 @@ void SPI_Close_Tx(SPI_handle_t *pHandle){
 	pHandle->TxLen = 0;
 	pHandle->pTxBuffer = (void *)0;
 	pHandle->TxState = SPI_READY;
+	pHandle->SPIx->CR2 &= ~(0xffff<<SPI_CR2_TSIZE_POS);	//clearing tsize after transmission
+	pHandle->SPIx->IFCR |= 1<<4;
+	SPI_Peripheral_Control(pHandle->SPIx, DISABLE);
 }
 
 void SPI_Close_Rx(SPI_handle_t *pHandle){
@@ -385,4 +391,6 @@ void SPI_Close_Rx(SPI_handle_t *pHandle){
 	pHandle->RxLen = 0;
 	pHandle->pRxBuffer = (void *)0;
 	pHandle->RxState = SPI_READY;
+	pHandle->SPIx->CR2 &= ~(0xffff<<SPI_CR2_TSIZE_POS);	//clearing tsize after reception
+	SPI_Peripheral_Control(pHandle->SPIx, DISABLE);
 }
