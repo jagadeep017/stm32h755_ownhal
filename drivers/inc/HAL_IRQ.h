@@ -66,7 +66,7 @@
 #define NVIC_IPR		((volatile uint32_t*)0xE000E400UL)	//NVIC_IPR[x] x:0-59
 
 
-
+void HAL_irq_config(uint8_t irq_number, uint8_t type);
 
 
 #endif /* STM32H7XX_HAL_INC_HAL_IRQ_H_ */
