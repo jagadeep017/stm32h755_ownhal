@@ -142,8 +142,8 @@ void SPI_send(SPI_reg_t *SPIx, uint8_t *pTxbuffer, uint16_t len){
 
 	//load the data in tx data register based on the size
 	uint8_t dff = SPIx->CFG1 & 0x1f;
-	SPI_Peripheral_Control(SPIx, ENABLE);
 	SPIx->CR2 |= len<<SPI_CR2_TSIZE_POS;
+	SPI_Peripheral_Control(SPIx, ENABLE);
 
 
 	SPIx->CR1 |= 1<<SPI_CR1_CSTART_POS;
@@ -254,7 +254,7 @@ uint8_t SPI_send_INT(SPI_handle_t *pSPIhandle, uint8_t *pTxBuffer, uint16_t Len)
 	//setting length in tsize
 	pSPIhandle->SPIx->CR2 |= Len<<SPI_CR2_TSIZE_POS;
 	pSPIhandle->SPIx->CFG2 &=~(0x3<<SPI_CFG2_COMM_POS);
-	pSPIhandle->SPIx->CFG2 |= (0x1<<SPI_CFG2_COMM_POS);
+	pSPIhandle->SPIx->CFG2 |= (SPI_BUS_SIMPLEX_TX<<SPI_CFG2_COMM_POS);
 	SPI_Peripheral_Control(pSPIhandle->SPIx, ENABLE);
 	if(pSPIhandle->TxState != SPI_TX_INT_BUSY){
 		//setting the buffer and its length
@@ -280,7 +280,7 @@ uint8_t SPI_recv_INT(SPI_handle_t *pSPIhandle, uint8_t *pRxBuffer, uint32_t Len)
 	if(pSPIhandle->RxState != SPI_RX_INT_BUSY){
 		pSPIhandle->SPIx->CR2 |= Len<<SPI_CR2_TSIZE_POS;
 		pSPIhandle->SPIx->CFG2 &=~(0x3<<SPI_CFG2_COMM_POS);
-		pSPIhandle->SPIx->CFG2 |= (0x2<<SPI_CFG2_COMM_POS);
+		pSPIhandle->SPIx->CFG2 |= (SPI_BUS_SIMPLEX_RX<<SPI_CFG2_COMM_POS);
 		SPI_Peripheral_Control(pSPIhandle->SPIx, ENABLE);
 		//setting the buffer and its length
 		pSPIhandle->pRxBuffer = pRxBuffer;
