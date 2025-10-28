@@ -102,7 +102,7 @@ int main(void)
 
 	HAL_GPIO_clk_control(USER_BUTTON_PORT, ENABLE);
 	HAL_GPIO_init(USER_BUTTON_PORT, &button);
-	HAL_GPIO_irq_config(IRQ_NO_EXTI15_10, ENABLE);	//irq number of EXTI13(10-15) is 40
+	HAL_irq_config(IRQ_NO_EXTI15_10, ENABLE);	//irq number of EXTI13(10-15) is 40
 
 
 
